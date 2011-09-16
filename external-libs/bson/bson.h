@@ -24,6 +24,7 @@ class BSON : public ObjectWrap {
   
     // Calculate size of function
     static Handle<Value> CalculateObjectSize(const Arguments &args);
+    static Handle<Value> CalculateObjectSize2(const Arguments &args);
     static Handle<Value> SerializeWithBufferAndIndex(const Arguments &args);
   
     // Constructor used for creating new BSON objects from C++
@@ -37,6 +38,7 @@ class BSON : public ObjectWrap {
     static char* extract_string(char *data, uint32_t offset);
     static const char* ToCString(const v8::String::Utf8Value& value);
     static uint32_t calculate_object_size(Handle<Value> object);
+    static uint32_t calculate_object_size2(Handle<Value> object);
 
     static void write_int32(char *data, uint32_t value);
     static void write_int64(char *data, int64_t value);

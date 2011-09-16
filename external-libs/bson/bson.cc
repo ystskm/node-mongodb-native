@@ -72,6 +72,7 @@ void BSON::Initialize(v8::Handle<v8::Object> target) {
   NODE_SET_METHOD(constructor_template->GetFunction(), "toLong", ToLong);
   NODE_SET_METHOD(constructor_template->GetFunction(), "toInt", ToInt);
   NODE_SET_METHOD(constructor_template->GetFunction(), "calculateObjectSize", CalculateObjectSize);
+  NODE_SET_METHOD(constructor_template->GetFunction(), "calculateObjectSize2", CalculateObjectSize2);
 
   target->Set(String::NewSymbol("BSON"), constructor_template->GetFunction());
 }
@@ -235,6 +236,16 @@ Handle<Value> BSON::CalculateObjectSize(const Arguments &args) {
   return scope.Close(Uint32::New(object_size));
 }
 
+Handle<Value> BSON::CalculateObjectSize2(const Arguments &args) {
+  HandleScope scope;
+  // Ensure we have a valid object
+  if(args.Length() == 1 && !args[0]->IsObject()) return VException("One argument required - [object]");
+  if(args.Length() > 1) return VException("One argument required - [object]");
+  // Calculate size of the object
+  uint32_t object_size = BSON::calculate_object_size2(args[0]);
+  // Return the object size
+  return scope.Close(Uint32::New(object_size));
+}
 
 Handle<Value> BSON::ToLong(const Arguments &args) {
   HandleScope scope;
@@ -792,6 +803,174 @@ uint32_t BSON::serialize(char *serialized_object, uint32_t index, Handle<Value> 
   }
   
   return index;
+}
+
+uint32_t BSON::calculate_object_size2(Handle<Value> value) {
+  uint32_t object_size = 0;
+  // printf("================================ ----------- calculate_object_size\n");  
+  // Local<String> objectProto = value->ObjectProtoToString();
+  // printf()
+  if(value->IsObject()) {
+    Local<Object> object = value->ToObject();
+    Local<String> objectProto = object->GetConstructorName();
+
+    // Convert name to char*
+    ssize_t len = DecodeBytes(objectProto, UTF8);
+    char *str = (char *)malloc(len * sizeof(char));
+    ssize_t written = DecodeWrite(str, len, objectProto, UTF8);
+    printf("============= [%s]\n", str);
+  }
+
+  // If we have an object let's unwrap it and calculate the sub sections
+  if(Long::HasInstance(value)) {
+    // printf("================================ calculate_object_size:long\n");
+    object_size = object_size + 8;
+  } else if(ObjectID::HasInstance(value)) {
+    // printf("================================ calculate_object_size:objectid\n");
+    object_size = object_size + 12;
+  } else if(Binary::HasInstance(value)) {
+    // printf("================================ calculate_object_size:binary\n");
+    // Unpack the object and encode
+    Local<Object> obj = value->ToObject();
+    Binary *binary_obj = Binary::Unwrap<Binary>(obj);
+    // Adjust the object_size, binary content lengt + total size int32 + binary size int32 + subtype
+    object_size += binary_obj->index + 4 + 1;
+  } else if(Code::HasInstance(value)) {
+    // printf("================================ calculate_object_size:code\n");
+    // Unpack the object and encode
+    Local<Object> obj = value->ToObject();
+    Code *code_obj = Code::Unwrap<Code>(obj);
+    // Let's calculate the size the code object adds adds
+    object_size += strlen(code_obj->code) + 4 + BSON::calculate_object_size2(code_obj->scope_object) + 4 + 1;
+  } else if(DBRef::HasInstance(value)) {
+    // Unpack the dbref
+    Local<Object> dbref = value->ToObject();
+    // Create an object containing the right namespace variables
+    Local<Object> obj = Object::New();
+    // unpack dbref to get to the bin
+    DBRef *db_ref_obj = DBRef::Unwrap<DBRef>(dbref);
+    // Encode the oid to bin
+    obj->Set(String::New("$ref"), dbref->Get(String::New("namespace")));
+    obj->Set(String::New("$id"), db_ref_obj->oid);
+    // obj->Set(String::New("$db"), dbref->Get(String::New("db")));
+    if(db_ref_obj->db != NULL) obj->Set(String::New("$db"), dbref->Get(String::New("db")));
+    // printf("================================ calculate_object_size:dbref:[%d]\n", BSON::calculate_object_size(obj));
+    // Calculate size
+    object_size += BSON::calculate_object_size2(obj);
+  } else if(value->IsString()) {
+    // printf("================================ calculate_object_size:string\n");
+    Local<String> str = value->ToString();
+    uint32_t utf8_length = str->Utf8Length();
+    
+    if(utf8_length != str->Length()) {
+      // Let's calculate the size the string adds, length + type(1 byte) + size(4 bytes)
+      object_size += str->Utf8Length() + 1 + 4;  
+    } else {
+      object_size += str->Length() + 1 + 4;        
+    }
+  } else if(value->IsInt32()) {
+    // printf("================================ calculate_object_size:int32\n");
+    object_size += 4;
+  } else if(value->IsNull()) {
+    // printf("================================ calculate_object_size:null\n");    
+  } else if(value->IsNumber()) {
+    // Check if we have a float value or a long value
+    Local<Number> number = value->ToNumber();
+    double d_number = number->NumberValue();
+    int64_t l_number = number->IntegerValue();
+    // Check if we have a double value and not a int64
+    double d_result = d_number - l_number;    
+    // If we have a value after subtracting the integer value we have a float
+    if(d_result > 0 || d_result < 0) {
+      object_size = object_size + 8;      
+    } else if(l_number <= BSON_INT32_MAX && l_number >= BSON_INT32_MIN) {
+      object_size = object_size + 4;
+    } else {
+      object_size = object_size + 8;
+    }
+  } else if(value->IsBoolean()) {
+    // printf("================================ calculate_object_size:boolean\n");
+    object_size = object_size + 1;
+  } else if(value->IsDate()) {
+    // printf("================================ calculate_object_size:date\n");
+    object_size = object_size + 8;
+  // } else if(value->IsObject() && value->ToObject()->ObjectProtoToString()->Equals(String::New("[object RegExp]"))) {
+  } else if(value->IsRegExp()) {
+    // Fetch the string for the regexp
+    Handle<RegExp> regExp = Handle<RegExp>::Cast(value);    
+    ssize_t len = DecodeBytes(regExp->GetSource(), UTF8);
+    int flags = regExp->GetFlags();
+    
+    // ignorecase
+    if((flags & (1 << 1)) != 0) len++;
+    //multiline
+    if((flags & (1 << 2)) != 0) len++;
+    // Calculate the space needed for the regexp: size of string - 2 for the /'ses +2 for null termiations
+    object_size = object_size + len + 2;
+  } else if(value->IsArray()) {
+    // printf("================================ calculate_object_size:array\n");
+    // Cast to array
+    Local<Array> array = Local<Array>::Cast(value->ToObject());
+    // Turn length into string to calculate the size of all the strings needed
+    char *length_str = (char *)malloc(256 * sizeof(char));
+    // Calculate the size of each element
+    for(uint32_t i = 0; i < array->Length(); i++) {
+      // Add "index" string size for each element
+      sprintf(length_str, "%d", i);
+      // Add the size of the string length
+      uint32_t label_length = strlen(length_str) + 1;
+      // Add the type definition size for each item
+      object_size = object_size + label_length + 1;
+      // Add size of the object
+      uint32_t object_length = BSON::calculate_object_size2(array->Get(Integer::New(i)));
+      object_size = object_size + object_length;
+    }
+    // Add the object size
+    object_size = object_size + 4 + 1;
+    // Free up memory
+    free(length_str);
+  } else if(value->IsFunction()) {
+  } else if(value->IsObject()) {
+    // printf("================================ calculate_object_size:object\n");
+    // Unwrap the object
+    Local<Object> object = value->ToObject();
+    Local<Array> property_names = object->GetPropertyNames();
+    
+    // Process all the properties on the object
+    for(uint32_t index = 0; index < property_names->Length(); index++) {
+      // printf("================================ calculate_object_size:string\n");
+
+      // Fetch the property name
+      Local<String> property_name = property_names->Get(index)->ToString();
+      
+      // Convert name to char*
+      ssize_t len = DecodeBytes(property_name, UTF8);
+
+      // Local<String> str = property_names->Get(index)->ToString();
+      // uint32_t utf8_length = str->Utf8Length();
+          
+      // if(utf8_length != str->Length()) {
+      //   // Let's calculate the size the string adds, length + type(1 byte) + size(4 bytes)
+      //   object_size += str->Utf8Length() + 1 + 4;  
+      // } else {
+      //   object_size += str->Length() + 1 + 4;        
+      // }
+
+
+      // Fetch the property name
+      // Local<String> property_name = property_names->Get(index)->ToString();
+      
+      // Fetch the object for the property
+      Local<Value> property = object->Get(property_name);
+      // Get size of property (property + property name length + 1 for terminating 0)
+      // object_size += BSON::calculate_object_size(property) + property_name->Length() + 1 + 1;
+      object_size += BSON::calculate_object_size2(property) + len + 1 + 1;
+    }      
+    
+    object_size = object_size + 4 + 1;
+  } 
+
+  return object_size;
 }
 
 uint32_t BSON::calculate_object_size(Handle<Value> value) {
