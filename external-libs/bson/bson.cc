@@ -807,58 +807,12 @@ uint32_t BSON::serialize(char *serialized_object, uint32_t index, Handle<Value> 
 
 uint32_t BSON::calculate_object_size2(Handle<Value> value) {
   uint32_t object_size = 0;
-  // printf("================================ ----------- calculate_object_size\n");  
+  // printf("================================ ----------- calculate_object_size::%i\n", value->IsObject() ? 1 : 0);
   // Local<String> objectProto = value->ObjectProtoToString();
   // printf()
-  if(value->IsObject()) {
-    Local<Object> object = value->ToObject();
-    Local<String> objectProto = object->GetConstructorName();
-
-    // Convert name to char*
-    ssize_t len = DecodeBytes(objectProto, UTF8);
-    char *str = (char *)malloc(len * sizeof(char));
-    ssize_t written = DecodeWrite(str, len, objectProto, UTF8);
-    printf("============= [%s]\n", str);
-  }
-
-  // If we have an object let's unwrap it and calculate the sub sections
-  if(Long::HasInstance(value)) {
-    // printf("================================ calculate_object_size:long\n");
-    object_size = object_size + 8;
-  } else if(ObjectID::HasInstance(value)) {
-    // printf("================================ calculate_object_size:objectid\n");
-    object_size = object_size + 12;
-  } else if(Binary::HasInstance(value)) {
-    // printf("================================ calculate_object_size:binary\n");
-    // Unpack the object and encode
-    Local<Object> obj = value->ToObject();
-    Binary *binary_obj = Binary::Unwrap<Binary>(obj);
-    // Adjust the object_size, binary content lengt + total size int32 + binary size int32 + subtype
-    object_size += binary_obj->index + 4 + 1;
-  } else if(Code::HasInstance(value)) {
-    // printf("================================ calculate_object_size:code\n");
-    // Unpack the object and encode
-    Local<Object> obj = value->ToObject();
-    Code *code_obj = Code::Unwrap<Code>(obj);
-    // Let's calculate the size the code object adds adds
-    object_size += strlen(code_obj->code) + 4 + BSON::calculate_object_size2(code_obj->scope_object) + 4 + 1;
-  } else if(DBRef::HasInstance(value)) {
-    // Unpack the dbref
-    Local<Object> dbref = value->ToObject();
-    // Create an object containing the right namespace variables
-    Local<Object> obj = Object::New();
-    // unpack dbref to get to the bin
-    DBRef *db_ref_obj = DBRef::Unwrap<DBRef>(dbref);
-    // Encode the oid to bin
-    obj->Set(String::New("$ref"), dbref->Get(String::New("namespace")));
-    obj->Set(String::New("$id"), db_ref_obj->oid);
-    // obj->Set(String::New("$db"), dbref->Get(String::New("db")));
-    if(db_ref_obj->db != NULL) obj->Set(String::New("$db"), dbref->Get(String::New("db")));
-    // printf("================================ calculate_object_size:dbref:[%d]\n", BSON::calculate_object_size(obj));
-    // Calculate size
-    object_size += BSON::calculate_object_size2(obj);
-  } else if(value->IsString()) {
-    // printf("================================ calculate_object_size:string\n");
+  // char *str;  
+  // 
+  if(value->IsString()) {
     Local<String> str = value->ToString();
     uint32_t utf8_length = str->Utf8Length();
     
@@ -931,43 +885,81 @@ uint32_t BSON::calculate_object_size2(Handle<Value> value) {
     free(length_str);
   } else if(value->IsFunction()) {
   } else if(value->IsObject()) {
-    // printf("================================ calculate_object_size:object\n");
-    // Unwrap the object
+    char *str;  
+    // Fetch the constructor name
     Local<Object> object = value->ToObject();
-    Local<Array> property_names = object->GetPropertyNames();
-    
-    // Process all the properties on the object
-    for(uint32_t index = 0; index < property_names->Length(); index++) {
-      // printf("================================ calculate_object_size:string\n");
+    Local<String> objectProto = object->GetConstructorName();
+    // Convert name to char*
+    ssize_t len = DecodeBytes(objectProto, UTF8);
+    str = (char *)malloc(len * sizeof(char));
+    ssize_t written = DecodeWrite(str, len, objectProto, UTF8);
+    // Add zero terminated string marker
+    *(str+len) = '\0';
+    // printf("============= [%s]\n", str);
 
-      // Fetch the property name
-      Local<String> property_name = property_names->Get(index)->ToString();
+    // If we have an object let's unwrap it and calculate the sub sections
+    if(strcmp(str, "Long") == 0) {
+      // printf("================================ calculate_object_size:long\n");
+      object_size = object_size + 8;
+      free(str);
+    } else if(strcmp(str, "ObjectID") == 0) {
+      // printf("================================ calculate_object_size:objectid\n");
+      object_size = object_size + 12;
+      free(str);
+    } else if(strcmp(str, "Binary") == 0) {
+      // printf("================================ calculate_object_size:binary\n");
+      Local<Uint32> positionObject = object->Get(String::New("position"))->ToUint32();
+      // Fetch the position integer
+      uint32_t position = positionObject->Value();
+      // Adjust the object_size, binary content lengt + total size int32 + binary size int32 + subtype
+      object_size += position + 4 + 1;
+      free(str);
+    } else if(strcmp(str, "Code") == 0) {
+      // printf("================================ calculate_object_size:code\n");
+      uint32_t codeLength = object->Get(String::New("code"))->ToString()->Utf8Length();
+      // Unpack the object and encode
+      Local<Value> scopeObject = object->Get(String::New("scope"));
+      // Let's calculate the size the code object adds adds
+      object_size += codeLength + 4 + BSON::calculate_object_size2(scopeObject) + 4 + 1;
+      free(str);
+    } else if(strcmp(str, "DBRef") == 0) {
+      // printf("================================ calculate_object_size:dbref\n");
+      // Unpack the dbref
+      Local<Object> dbref = value->ToObject();
+      // Create an object containing the right namespace variables
+      Local<Object> obj = Object::New();
+      // Encode the oid to bin
+      obj->Set(String::New("$ref"), dbref->Get(String::New("namespace")));
+      obj->Set(String::New("$id"), dbref->Get(String::New("oid")));
       
-      // Convert name to char*
-      ssize_t len = DecodeBytes(property_name, UTF8);
-
-      // Local<String> str = property_names->Get(index)->ToString();
-      // uint32_t utf8_length = str->Utf8Length();
-          
-      // if(utf8_length != str->Length()) {
-      //   // Let's calculate the size the string adds, length + type(1 byte) + size(4 bytes)
-      //   object_size += str->Utf8Length() + 1 + 4;  
-      // } else {
-      //   object_size += str->Length() + 1 + 4;        
-      // }
-
-
-      // Fetch the property name
-      // Local<String> property_name = property_names->Get(index)->ToString();
-      
-      // Fetch the object for the property
-      Local<Value> property = object->Get(property_name);
-      // Get size of property (property + property name length + 1 for terminating 0)
-      // object_size += BSON::calculate_object_size(property) + property_name->Length() + 1 + 1;
-      object_size += BSON::calculate_object_size2(property) + len + 1 + 1;
-    }      
+      if(dbref->Get(String::New("db"))->IsString()) {
+        obj->Set(String::New("$db"), dbref->Get(String::New("db")));
+      }
+      // Calculate size
+      object_size += BSON::calculate_object_size2(obj);
+      free(str);
+    } else {
+      // printf("================================ calculate_object_size:object\n");
+      // Unwrap the object
+      Local<Object> object = value->ToObject();
+      Local<Array> property_names = object->GetPropertyNames();
     
-    object_size = object_size + 4 + 1;
+      // Process all the properties on the object
+      for(uint32_t index = 0; index < property_names->Length(); index++) {
+        // printf("================================ calculate_object_size:string\n");
+        // Fetch the property name
+        Local<String> property_name = property_names->Get(index)->ToString();
+      
+        // Convert name to char*
+        ssize_t len = DecodeBytes(property_name, UTF8);
+        // Fetch the object for the property
+        Local<Value> property = object->Get(property_name);
+        // Get size of property (property + property name length + 1 for terminating 0)
+        object_size += BSON::calculate_object_size2(property) + len + 1 + 1;
+      }      
+    
+      object_size = object_size + 4 + 1;      
+    }
   } 
 
   return object_size;

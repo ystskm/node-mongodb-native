@@ -21,16 +21,52 @@ var Long2 = require('./bson').Long,
     
 sys.puts("=== EXECUTING TEST_BSON ===");
 
+// JS Object
 var object = {
     long:Long.fromNumber(100), 
     id:new ObjectID(), 
     bin:new Binary(), 
-    code:new Code(),
-    ref:new DBRef()};
-var objectSize = BSON.calculateObjectSize(object);
-debug(inspect(objectSize))
-var objectSize = BSON.calculateObjectSize2(object);
-debug(inspect(objectSize))
+    code:new Code('hello', {a:1}),
+    ref:new DBRef(new ObjectID(), 'namespace', 'hello')};
+
+// C++ Object
+var object2 = {
+    long:Long2.fromNumber(100), 
+    id:new ObjectID2(), 
+    bin:new Binary2(), 
+    code:new Code2('hello', {a:1}),
+    ref:new DBRef2(new ObjectID2(), 'namespace', 'hello')};
+    
+var COUNT = 100000;
+var x, start, end, i
+
+// Benchmark 1
+console.log(COUNT + "x (objectBSON = BSON.serialize(object))")
+start = new Date
+
+for (i=COUNT; --i>=0; ) {
+  BSON.calculateObjectSize2(object);
+}    
+ 
+end = new Date
+console.log("time = ", end - start, "ms -", COUNT * 1000 / (end - start), " ops/sec")
+
+// Benchmark 2
+console.log(COUNT + "x (objectBSON = BSON.serialize(object))")
+start = new Date
+
+for (i=COUNT; --i>=0; ) {
+  BSON.calculateObjectSize(object2);
+}    
+ 
+end = new Date
+console.log("time = ", end - start, "ms -", COUNT * 1000 / (end - start), " ops/sec")
+   
+    
+// var objectSize = BSONJS.calculateObjectSize(object);
+// debug(inspect(objectSize))
+// var objectSize = BSON.calculateObjectSize2(object);
+// debug(inspect(objectSize))
 
 
 // // Should fail due to illegal key
