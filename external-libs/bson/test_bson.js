@@ -40,6 +40,17 @@ var object2 = {
 var COUNT = 100000;
 var x, start, end, i
 
+// Benchmark 0
+console.log(COUNT + "x (objectBSON = BSON.serialize(object))")
+start = new Date
+
+for (i=COUNT; --i>=0; ) {
+  BSONJS.calculateObjectSize(object);
+}    
+ 
+end = new Date
+console.log("time = ", end - start, "ms -", COUNT * 1000 / (end - start), " ops/sec")
+
 // Benchmark 1
 console.log(COUNT + "x (objectBSON = BSON.serialize(object))")
 start = new Date
@@ -57,6 +68,17 @@ start = new Date
 
 for (i=COUNT; --i>=0; ) {
   BSON.calculateObjectSize(object2);
+}    
+ 
+end = new Date
+console.log("time = ", end - start, "ms -", COUNT * 1000 / (end - start), " ops/sec")
+
+// Benchmark 3
+console.log(COUNT + "x (objectBSON = BSON.serialize(object))")
+start = new Date
+
+for (i=COUNT; --i>=0; ) {
+  BSON.calculateObjectSize2(object2);
 }    
  
 end = new Date

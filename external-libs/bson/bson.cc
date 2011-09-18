@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <list>
 
 #include "bson.h"
 #include "long.h"
@@ -21,6 +22,7 @@
 
 using namespace v8;
 using namespace node;
+using namespace std;
 
 // BSON DATA TYPES
 const uint32_t BSON_DATA_NUMBER = 1;
@@ -241,6 +243,9 @@ Handle<Value> BSON::CalculateObjectSize2(const Arguments &args) {
   // Ensure we have a valid object
   if(args.Length() == 1 && !args[0]->IsObject()) return VException("One argument required - [object]");
   if(args.Length() > 1) return VException("One argument required - [object]");
+  list< Local<Value> > L;
+  L.push_back(args[0]);
+  
   // Calculate size of the object
   uint32_t object_size = BSON::calculate_object_size2(args[0]);
   // Return the object size
@@ -807,12 +812,44 @@ uint32_t BSON::serialize(char *serialized_object, uint32_t index, Handle<Value> 
 
 uint32_t BSON::calculate_object_size2(Handle<Value> value) {
   uint32_t object_size = 0;
-  // printf("================================ ----------- calculate_object_size::%i\n", value->IsObject() ? 1 : 0);
-  // Local<String> objectProto = value->ObjectProtoToString();
-  // printf()
-  // char *str;  
-  // 
-  if(value->IsString()) {
+  bool isObject = value->IsObject();
+
+  if(isObject && Long::HasInstance(value)) {
+    // printf("================================ calculate_object_size:long\n");
+    object_size = object_size + 8;
+  } else if(isObject && ObjectID::HasInstance(value)) {
+    // printf("================================ calculate_object_size:objectid\n");
+    object_size = object_size + 12;
+  } else if(isObject && Binary::HasInstance(value)) {
+    // printf("================================ calculate_object_size:binary\n");
+    // Unpack the object and encode
+    Local<Object> obj = value->ToObject();
+    Binary *binary_obj = Binary::Unwrap<Binary>(obj);
+    // Adjust the object_size, binary content lengt + total size int32 + binary size int32 + subtype
+    object_size += binary_obj->index + 4 + 1;
+  } else if(isObject && Code::HasInstance(value)) {
+    // printf("================================ calculate_object_size:code\n");
+    // Unpack the object and encode
+    Local<Object> obj = value->ToObject();
+    Code *code_obj = Code::Unwrap<Code>(obj);
+    // Let's calculate the size the code object adds adds
+    object_size += strlen(code_obj->code) + 4 + BSON::calculate_object_size(code_obj->scope_object) + 4 + 1;
+  } else if(isObject && DBRef::HasInstance(value)) {
+    // Unpack the dbref
+    Local<Object> dbref = value->ToObject();
+    // Create an object containing the right namespace variables
+    Local<Object> obj = Object::New();
+    // unpack dbref to get to the bin
+    DBRef *db_ref_obj = DBRef::Unwrap<DBRef>(dbref);
+    // Encode the oid to bin
+    obj->Set(String::New("$ref"), dbref->Get(String::New("namespace")));
+    obj->Set(String::New("$id"), db_ref_obj->oid);
+    // obj->Set(String::New("$db"), dbref->Get(String::New("db")));
+    if(db_ref_obj->db != NULL) obj->Set(String::New("$db"), dbref->Get(String::New("db")));
+    // printf("================================ calculate_object_size:dbref:[%d]\n", BSON::calculate_object_size(obj));
+    // Calculate size
+    object_size += BSON::calculate_object_size(obj);
+  } else if(value->IsString()) {
     Local<String> str = value->ToString();
     uint32_t utf8_length = str->Utf8Length();
     
