@@ -3,14 +3,14 @@ var BSON = require('../lib/mongodb').BSONNative.BSON,
   debug = require('util').debug,
   inspect = require('util').inspect;
 
-// var BSON = require('../lib/mongodb').BSONPure.BSON;
-// var ObjectID = require('../lib/mongodb').BSONPure.ObjectID;
+var BSON = require('../lib/mongodb').BSONPure.BSON;
+var ObjectID = require('../lib/mongodb').BSONPure.ObjectID;
 
 // require('util').debug(require('util').inspect(BSON))
 
 var COUNT = 100000;
-var COUNT = 1;
-var COUNT = 5000;
+// var COUNT = 1;
+// var COUNT = 5000;
 // var object = {
 //     string: "Strings are great",
 //     decimal: 3.14159265,
@@ -55,7 +55,8 @@ for (i=COUNT; --i>=0; ) {
   //   anotherString: "another string"
   // }
 
-  objectBSON = BSON.serialize(object, null, true)
+  // objectBSON = BSON.serialize(object, null, true)
+  JSON.Stringify(object);
 }
 
 end = new Date
