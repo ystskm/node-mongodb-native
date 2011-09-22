@@ -26,18 +26,22 @@ var object = {
     long:Long.fromNumber(100), 
     id:new ObjectID(), 
     bin:new Binary(), 
-    code:new Code('hello', {a:1}),
-    ref:new DBRef(new ObjectID(), 'namespace', 'hello')};
+    // code:new Code('hello', {a:1}),
+    code:new Code('hello'),
+    ref:new DBRef('namespace', new ObjectID(), 'hello')};
 
 // C++ Object
 var object2 = {
     long:Long2.fromNumber(100), 
     id:new ObjectID2(), 
     bin:new Binary2(), 
-    code:new Code2('hello', {a:1}),
-    ref:new DBRef2(new ObjectID2(), 'namespace', 'hello')};
+    // code:new Code2('hello', {a:1}),
+    code:new Code2('hello'),
+    ref:new DBRef2('namespace', new ObjectID2(), 'hello')};
     
-var COUNT = 100000;
+// var COUNT = 100000;
+var COUNT = 1;
+var COUNT = 1000;
 var x, start, end, i
 
 // Benchmark 0
@@ -45,44 +49,53 @@ console.log(COUNT + "x (objectBSON = BSON.serialize(object))")
 start = new Date
 
 for (i=COUNT; --i>=0; ) {
-  BSONJS.calculateObjectSize(object);
+  size = BSONJS.calculateObjectSize(object);
 }    
+
+debug("========== size = " + size)
  
 end = new Date
 console.log("time = ", end - start, "ms -", COUNT * 1000 / (end - start), " ops/sec")
 
-// Benchmark 1
-console.log(COUNT + "x (objectBSON = BSON.serialize(object))")
-start = new Date
+// // Benchmark 1
+// console.log(COUNT + "x (objectBSON = BSON.serialize(object))")
+// start = new Date
+// 
+// for (i=COUNT; --i>=0; ) {
+//   BSON.calculateObjectSize2(object);
+// }    
+//  
+// end = new Date
+// console.log("time = ", end - start, "ms -", COUNT * 1000 / (end - start), " ops/sec")
 
-for (i=COUNT; --i>=0; ) {
-  BSON.calculateObjectSize2(object);
-}    
- 
-end = new Date
-console.log("time = ", end - start, "ms -", COUNT * 1000 / (end - start), " ops/sec")
+console.log("\n----------------------------------------------------------------------- C++ object\n");
 
 // Benchmark 2
 console.log(COUNT + "x (objectBSON = BSON.serialize(object))")
 start = new Date
 
 for (i=COUNT; --i>=0; ) {
-  BSON.calculateObjectSize(object2);
+  // size = BSON.calculateObjectSize(object2);
+  BSON.serialize(object2, null, true)
 }    
+
+// debug("========== size = " + size)
  
 end = new Date
 console.log("time = ", end - start, "ms -", COUNT * 1000 / (end - start), " ops/sec")
 
-// Benchmark 3
-console.log(COUNT + "x (objectBSON = BSON.serialize(object))")
-start = new Date
-
-for (i=COUNT; --i>=0; ) {
-  BSON.calculateObjectSize2(object2);
-}    
- 
-end = new Date
-console.log("time = ", end - start, "ms -", COUNT * 1000 / (end - start), " ops/sec")
+// // Benchmark 3
+// console.log(COUNT + "x (objectBSON = BSON.serialize(object))")
+// start = new Date
+// 
+// for (i=COUNT; --i>=0; ) {
+//   size = BSON.calculateObjectSize2(object2);
+// }    
+//  
+// // debug("========== size = " + size)
+// 
+// end = new Date
+// console.log("time = ", end - start, "ms -", COUNT * 1000 / (end - start), " ops/sec")
    
     
 // var objectSize = BSONJS.calculateObjectSize(object);

@@ -3,8 +3,8 @@ var BSON = require('../lib/mongodb').BSONNative.BSON,
   debug = require('util').debug,
   inspect = require('util').inspect;
 
-var BSON = require('../lib/mongodb').BSONPure.BSON;
-var ObjectID = require('../lib/mongodb').BSONPure.ObjectID;
+// var BSON = require('../lib/mongodb').BSONPure.BSON;
+// var ObjectID = require('../lib/mongodb').BSONPure.ObjectID;
 
 // require('util').debug(require('util').inspect(BSON))
 
