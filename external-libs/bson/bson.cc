@@ -76,6 +76,7 @@ void BSON::Initialize(v8::Handle<v8::Object> target) {
   
   // Class methods
   NODE_SET_METHOD(constructor_template->GetFunction(), "serialize", BSONSerialize);  
+  NODE_SET_METHOD(constructor_template->GetFunction(), "serialize2", BSONSerialize2);  
   NODE_SET_METHOD(constructor_template->GetFunction(), "serializeWithBufferAndIndex", SerializeWithBufferAndIndex);
   NODE_SET_METHOD(constructor_template->GetFunction(), "deserialize", BSONDeserialize);  
   NODE_SET_METHOD(constructor_template->GetFunction(), "encodeLong", EncodeLong);  
@@ -158,7 +159,7 @@ Handle<Value> BSON::SerializeWithBufferAndIndex(const Arguments &args) {
   return scope.Close(Uint32::New(index + object_size - 1));
 }
 
-Handle<Value> BSON::BSONSerialize(const Arguments &args) {
+Handle<Value> BSON::BSONSerialize2(const Arguments &args) {
   HandleScope scope;
 
   if(args.Length() == 1 && !args[0]->IsObject()) return VException("One, two or tree arguments required - [object] or [object, boolean] or [object, boolean, boolean]");
@@ -168,6 +169,58 @@ Handle<Value> BSON::BSONSerialize(const Arguments &args) {
 
   // Calculate the total size of the document in binary form to ensure we only allocate memory once
   uint32_t object_size = BSON::calculate_object_size2(args[0]);
+  // Allocate the memory needed for the serializtion
+  char *serialized_object = (char *)malloc(object_size * sizeof(char));  
+  // Catch any errors
+  try {
+    // Check if we have a boolean value
+    bool check_key = false;
+    if(args.Length() == 3 && args[1]->IsBoolean()) {
+      check_key = args[1]->BooleanValue();
+    }
+    
+    // Serialize the object
+    BSON::serialize2(serialized_object, 0, Null(), args[0], check_key);      
+  } catch(char *err_msg) {
+    // Free up serialized object space
+    free(serialized_object);
+    V8::AdjustAmountOfExternalAllocatedMemory(-object_size);
+    // Throw exception with the string
+    Handle<Value> error = VException(err_msg);
+    // free error message
+    free(err_msg);
+    // Return error
+    return error;
+  }
+
+  // Write the object size
+  BSON::write_int32((serialized_object), object_size);  
+
+  // If we have 3 arguments
+  if(args.Length() == 3) {
+    // Local<Boolean> asBuffer = args[2]->ToBoolean();    
+    Buffer *buffer = Buffer::New(serialized_object, object_size);
+    // Release the serialized string
+    free(serialized_object);
+    return scope.Close(buffer->handle_);
+  } else {
+    // Encode the string (string - null termiating character)
+    Local<Value> bin_value = Encode(serialized_object, object_size, BINARY)->ToString();
+    // Return the serialized content
+    return bin_value;    
+  }  
+}
+
+Handle<Value> BSON::BSONSerialize(const Arguments &args) {
+  HandleScope scope;
+
+  if(args.Length() == 1 && !args[0]->IsObject()) return VException("One, two or tree arguments required - [object] or [object, boolean] or [object, boolean, boolean]");
+  if(args.Length() == 2 && !args[0]->IsObject() && !args[1]->IsBoolean()) return VException("One, two or tree arguments required - [object] or [object, boolean] or [object, boolean, boolean]");
+  if(args.Length() == 3 && !args[0]->IsObject() && !args[1]->IsBoolean() && !args[2]->IsBoolean()) return VException("One, two or tree arguments required - [object] or [object, boolean] or [object, boolean, boolean]");
+  if(args.Length() > 3) return VException("One, two or tree arguments required - [object] or [object, boolean] or [object, boolean, boolean]");
+
+  // Calculate the total size of the document in binary form to ensure we only allocate memory once
+  uint32_t object_size = BSON::calculate_object_size(args[0]);
   // Allocate the memory needed for the serializtion
   char *serialized_object = (char *)malloc(object_size * sizeof(char));  
   // Catch any errors
@@ -320,6 +373,180 @@ char *BSON::check_key(Local<String> key) {
   // Return No check key error
   return NULL;
 }
+
+uint32_t BSON::serialize2(char *serialized_object, uint32_t index, Handle<Value> name, Handle<Value> value, bool check_key) {
+  // Scope for method execution
+  HandleScope scope;
+  
+  // Final object size
+  uint32_t object_size = (4 + 1);
+  uint32_t stackIndex = 0;
+  // Controls the flow
+  bool done = false;
+  bool finished = false;
+  bool isObject = false;
+
+  // Define a local vector that keeps the stack
+  // vector<vector<Local<Value> > > stack;// = new vector<vector<Local<Value> > >(0);
+  
+  // My own stack max of 1024 objects deep
+  Local<Object> *stack[1024];
+  
+  // Current object we are processing
+  Local<Object> currentObject = value->ToObject();
+  // Current list of object keys
+  Local<Array> keys = currentObject->GetPropertyNames();
+  // Contains pointer to keysIndex
+  uint32_t keysIndex = 0;
+  uint32_t keysLength = keys->Length();
+  // Add pointer to start of new object
+  index = index + 4;
+    
+  // printf("=================================================================================\n");      
+  // printf("Start serializing\n");      
+    
+  while(!done) {
+    // If the index is bigger than the number of keys for the object
+    // we finished up the previous object and are ready for the next one
+    if(keysIndex >= keys->Length()) {
+      keys = currentObject->GetPropertyNames();
+      keysLength = keys->Length();
+    }
+    
+    // Iterate over all the keys
+    while(keysIndex < keysLength) {
+      // Fetch the key name
+      Local<String> name = keys->Get(Number::New(keysIndex++))->ToString();
+      // Fetch the object related to the key
+      Local<Value> value = currentObject->Get(name);
+      // Check if we have an object
+      isObject = value->IsObject();
+      
+      if(isObject && Long::HasInstance(value)) {
+        // printf("======================================= long::%d\n", index);
+        
+        // Save the string at the offset provided
+        *(serialized_object + index) = BSON_DATA_LONG;
+        // Adjust writing position for the first byte
+        index = index + 1;
+        // Convert name to char*
+        ssize_t len = DecodeBytes(name, UTF8);
+        ssize_t written = DecodeWrite((serialized_object + index), len, name, UTF8);
+        // Add null termiation for the string
+        *(serialized_object + index + len) = '\0';    
+        // Adjust the index
+        index = index + len + 1;
+
+        // Unpack the object and encode
+        Local<Object> obj = value->ToObject();
+        Long *long_obj = Long::Unwrap<Long>(obj);
+        // Write the content to the char array
+        BSON::write_int32((serialized_object + index), long_obj->low_bits);
+        BSON::write_int32((serialized_object + index + 4), long_obj->high_bits);
+        // Adjust the index
+        index = index + 8;      
+      } else if(isObject) {
+        // printf("======================================= object::\n");
+        
+      }
+        // printf("  = Long\n");
+        // object_size = name->Utf8Length() + 1 + object_size + 8 + 1;
+      // } else if(isObject && DBRef::HasInstance(value)) {
+      //   // printf("  = DbRef\n");
+      //   // Unpack the dbref
+      //   Local<Object> dbref = value->ToObject();
+      //   // unpack dbref to get to the bin
+      //   DBRef *db_ref_obj = DBRef::Unwrap<DBRef>(dbref);
+      //   uint32_t dbRefSize = 0;
+      //   
+      //   // Add object header size + terminating 0
+      //   dbRefSize += 4 + 1;
+      //   
+      //   // Calculate the $ref size
+      //   dbRefSize += 1; //type
+      //   dbRefSize += 4 + 1; //name
+      //   dbRefSize += 4; // string length int32
+      //   dbRefSize += strlen(db_ref_obj->ref); // length of string
+      //   dbRefSize += 1; // termiating 0
+      // 
+      //   // Calculate the $db size
+      //   if(db_ref_obj->db != NULL) {
+      //     dbRefSize += 1; //type
+      //     dbRefSize += 3 + 1; //name
+      //     dbRefSize += 4; // string length int32
+      //     dbRefSize += strlen(db_ref_obj->db); // length of string
+      //     dbRefSize += 1; // termiating 0          
+      //   }
+      //   
+      //   // Make an assumption it's an objectID for the test
+      //   if(db_ref_obj->oid->IsObject() && ObjectID::HasInstance(db_ref_obj->oid)) {
+      //     dbRefSize += 1; //type
+      //     dbRefSize += 3 + 1; //name
+      //     dbRefSize += 12;
+      //   }
+      //   
+      //   // Add the object size to the total
+      //   object_size = name->Utf8Length() + 1 + object_size +  dbRefSize + 1;
+      // } else if(isObject && ObjectID::HasInstance(value)) {
+      //   // printf("  = ObjectID\n");
+      //   object_size = name->Utf8Length() + 1 + object_size + 12 + 1;
+      // } else if(isObject && Binary::HasInstance(value)) {
+      //   // printf("  = Binary\n");
+      //   // Unpack the object and encode
+      //   Local<Object> obj = value->ToObject();
+      //   Binary *binary_obj = Binary::Unwrap<Binary>(obj);
+      //   // Adjust the object_size, binary content lengt + total size int32 + binary size int32 + subtype
+      //   object_size = name->Utf8Length() + 1 + object_size + binary_obj->index + 4 + 1 + 1;
+      // } else if(isObject && Code::HasInstance(value)) {
+      //   // printf("  = Code\n");        
+      //   // Unpack the dbref
+      //   Local<Object> code = value->ToObject();
+      //   // unpack dbref to get to the bin
+      //   Code *code_ref_obj = Code::Unwrap<Code>(code);        
+      //   // Calculate the code size
+      //   object_size = name->Utf8Length() + 1 + object_size + strlen(code_ref_obj->code) + 4 + 1 + 1;
+      // }
+      
+      
+      // printf("======================================================================== 1\n");      
+    }
+
+    // printf("======================================================================== 2\n");      
+    
+    // If we have finished all the keys
+    if(keysIndex == keysLength) {
+      finished = false;
+    }
+    
+    // Validate the stack
+    if(stackIndex == 0) {
+      // printf("======================================================================== 3\n");      
+      done = true;
+    } else if(finished || keysIndex == keysLength) {
+      // Pop off the stack
+      stackIndex = stackIndex - 1;
+      // Fetch the current object stack
+      // vector<Local<Value> > currentObjectStored = stack.back();
+      // stack.pop_back();
+      // // Unroll the current object
+      // currentObject = currentObjectStored.back()->ToObject();
+      // currentObjectStored.pop_back();
+      // // Unroll the keysIndex
+      // keys = Local<Array>::Cast(currentObjectStored.back()->ToObject());
+      // currentObjectStored.pop_back();
+      // // Unroll the keysIndex
+      // keysIndex = currentObjectStored.back()->ToUint32()->Value();
+      // currentObjectStored.pop_back();      
+      // // Check if we finished up
+      // if(keysIndex == keys->Length()) {
+      //   finished = true;
+      // }
+    }  
+  }
+  
+  return 0;
+}
+
 
 uint32_t BSON::serialize(char *serialized_object, uint32_t index, Handle<Value> name, Handle<Value> value, bool check_key) {
   // Scope for method execution
@@ -981,6 +1208,31 @@ uint32_t BSON::calculate_object_size2(Handle<Value> value) {
       if(isObject && Long::HasInstance(value)) {
         // printf("  = Long\n");
         object_size = name->Utf8Length() + 1 + object_size + 8 + 1;
+      } else if(value->IsString()) {
+        Local<String> str = value->ToString();
+        uint32_t utf8_length = str->Utf8Length();
+
+        if(utf8_length != str->Length()) {
+          // Let's calculate the size the string adds, length + type(1 byte) + size(4 bytes)
+          object_size += name->Utf8Length() + 1 + str->Utf8Length() + 1 + 4 + 1;
+        } else {
+          object_size += name->Utf8Length() + 1 + str->Length() + 1 + 4 + 1;
+        }           
+      } else if(value->IsNumber()) {
+        // Check if we have a float value or a long value
+        Local<Number> number = value->ToNumber();
+        double d_number = number->NumberValue();
+        int64_t l_number = number->IntegerValue();
+        // Check if we have a double value and not a int64
+        double d_result = d_number - l_number;    
+        // If we have a value after subtracting the integer value we have a float
+        if(d_result > 0 || d_result < 0) {
+          object_size = name->Utf8Length() + 1 + object_size + 8 + 1;
+        } else if(l_number <= BSON_INT32_MAX && l_number >= BSON_INT32_MIN) {
+          object_size = name->Utf8Length() + 1 + object_size + 4 + 1;
+        } else {
+          object_size = name->Utf8Length() + 1 + object_size + 8 + 1;
+        }
       } else if(isObject && DBRef::HasInstance(value)) {
         // printf("  = DbRef\n");
         // Unpack the dbref
@@ -1074,197 +1326,6 @@ uint32_t BSON::calculate_object_size2(Handle<Value> value) {
       // }
     }
   }
-  
-  
-  
-  // V.push_back(args[0]);
-
-  // bool isObject = value->IsObject();
-  // 
-  // if(isObject && Long::HasInstance(value)) {
-  //   // printf("================================ calculate_object_size:long\n");
-  //   object_size = object_size + 8;
-  // } else if(isObject && ObjectID::HasInstance(value)) {
-  //   // printf("================================ calculate_object_size:objectid\n");
-  //   object_size = object_size + 12;
-  // } else if(isObject && Binary::HasInstance(value)) {
-  //   // printf("================================ calculate_object_size:binary\n");
-  //   // Unpack the object and encode
-  //   Local<Object> obj = value->ToObject();
-  //   Binary *binary_obj = Binary::Unwrap<Binary>(obj);
-  //   // Adjust the object_size, binary content lengt + total size int32 + binary size int32 + subtype
-  //   object_size += binary_obj->index + 4 + 1;
-  // } else if(isObject && Code::HasInstance(value)) {
-  //   // printf("================================ calculate_object_size:code\n");
-  //   // Unpack the object and encode
-  //   Local<Object> obj = value->ToObject();
-  //   Code *code_obj = Code::Unwrap<Code>(obj);
-  //   // Let's calculate the size the code object adds adds
-  //   object_size += strlen(code_obj->code) + 4 + BSON::calculate_object_size(code_obj->scope_object) + 4 + 1;
-  // } else if(isObject && DBRef::HasInstance(value)) {
-  //   // Unpack the dbref
-  //   Local<Object> dbref = value->ToObject();
-  //   // Create an object containing the right namespace variables
-  //   Local<Object> obj = Object::New();
-  //   // unpack dbref to get to the bin
-  //   DBRef *db_ref_obj = DBRef::Unwrap<DBRef>(dbref);
-  //   // Encode the oid to bin
-  //   obj->Set(String::New("$ref"), dbref->Get(String::New("namespace")));
-  //   obj->Set(String::New("$id"), db_ref_obj->oid);
-  //   // obj->Set(String::New("$db"), dbref->Get(String::New("db")));
-  //   if(db_ref_obj->db != NULL) obj->Set(String::New("$db"), dbref->Get(String::New("db")));
-  //   // printf("================================ calculate_object_size:dbref:[%d]\n", BSON::calculate_object_size(obj));
-  //   // Calculate size
-  //   object_size += BSON::calculate_object_size(obj);
-  // } else if(value->IsString()) {
-  //   Local<String> str = value->ToString();
-  //   uint32_t utf8_length = str->Utf8Length();
-  //   
-  //   if(utf8_length != str->Length()) {
-  //     // Let's calculate the size the string adds, length + type(1 byte) + size(4 bytes)
-  //     object_size += str->Utf8Length() + 1 + 4;  
-  //   } else {
-  //     object_size += str->Length() + 1 + 4;        
-  //   }
-  // } else if(value->IsInt32()) {
-  //   // printf("================================ calculate_object_size:int32\n");
-  //   object_size += 4;
-  // } else if(value->IsNull()) {
-  //   // printf("================================ calculate_object_size:null\n");    
-  // } else if(value->IsNumber()) {
-  //   // Check if we have a float value or a long value
-  //   Local<Number> number = value->ToNumber();
-  //   double d_number = number->NumberValue();
-  //   int64_t l_number = number->IntegerValue();
-  //   // Check if we have a double value and not a int64
-  //   double d_result = d_number - l_number;    
-  //   // If we have a value after subtracting the integer value we have a float
-  //   if(d_result > 0 || d_result < 0) {
-  //     object_size = object_size + 8;      
-  //   } else if(l_number <= BSON_INT32_MAX && l_number >= BSON_INT32_MIN) {
-  //     object_size = object_size + 4;
-  //   } else {
-  //     object_size = object_size + 8;
-  //   }
-  // } else if(value->IsBoolean()) {
-  //   // printf("================================ calculate_object_size:boolean\n");
-  //   object_size = object_size + 1;
-  // } else if(value->IsDate()) {
-  //   // printf("================================ calculate_object_size:date\n");
-  //   object_size = object_size + 8;
-  // // } else if(value->IsObject() && value->ToObject()->ObjectProtoToString()->Equals(String::New("[object RegExp]"))) {
-  // } else if(value->IsRegExp()) {
-  //   // Fetch the string for the regexp
-  //   Handle<RegExp> regExp = Handle<RegExp>::Cast(value);    
-  //   ssize_t len = DecodeBytes(regExp->GetSource(), UTF8);
-  //   int flags = regExp->GetFlags();
-  //   
-  //   // ignorecase
-  //   if((flags & (1 << 1)) != 0) len++;
-  //   //multiline
-  //   if((flags & (1 << 2)) != 0) len++;
-  //   // Calculate the space needed for the regexp: size of string - 2 for the /'ses +2 for null termiations
-  //   object_size = object_size + len + 2;
-  // } else if(value->IsArray()) {
-  //   // printf("================================ calculate_object_size:array\n");
-  //   // Cast to array
-  //   Local<Array> array = Local<Array>::Cast(value->ToObject());
-  //   // Turn length into string to calculate the size of all the strings needed
-  //   char *length_str = (char *)malloc(256 * sizeof(char));
-  //   // Calculate the size of each element
-  //   for(uint32_t i = 0; i < array->Length(); i++) {
-  //     // Add "index" string size for each element
-  //     sprintf(length_str, "%d", i);
-  //     // Add the size of the string length
-  //     uint32_t label_length = strlen(length_str) + 1;
-  //     // Add the type definition size for each item
-  //     object_size = object_size + label_length + 1;
-  //     // Add size of the object
-  //     uint32_t object_length = BSON::calculate_object_size2(array->Get(Integer::New(i)));
-  //     object_size = object_size + object_length;
-  //   }
-  //   // Add the object size
-  //   object_size = object_size + 4 + 1;
-  //   // Free up memory
-  //   free(length_str);
-  // } else if(value->IsFunction()) {
-  // } else if(value->IsObject()) {
-  //   char *str;  
-  //   // Fetch the constructor name
-  //   Local<Object> object = value->ToObject();
-  //   Local<String> objectProto = object->GetConstructorName();
-  //   // Convert name to char*
-  //   ssize_t len = DecodeBytes(objectProto, UTF8);
-  //   str = (char *)malloc(len * sizeof(char));
-  //   ssize_t written = DecodeWrite(str, len, objectProto, UTF8);
-  //   // Add zero terminated string marker
-  //   *(str+len) = '\0';
-  //   // printf("============= [%s]\n", str);
-  // 
-  //   // If we have an object let's unwrap it and calculate the sub sections
-  //   if(strcmp(str, "Long") == 0) {
-  //     // printf("================================ calculate_object_size:long\n");
-  //     object_size = object_size + 8;
-  //     free(str);
-  //   } else if(strcmp(str, "ObjectID") == 0) {
-  //     // printf("================================ calculate_object_size:objectid\n");
-  //     object_size = object_size + 12;
-  //     free(str);
-  //   } else if(strcmp(str, "Binary") == 0) {
-  //     // printf("================================ calculate_object_size:binary\n");
-  //     Local<Uint32> positionObject = object->Get(String::New("position"))->ToUint32();
-  //     // Fetch the position integer
-  //     uint32_t position = positionObject->Value();
-  //     // Adjust the object_size, binary content lengt + total size int32 + binary size int32 + subtype
-  //     object_size += position + 4 + 1;
-  //     free(str);
-  //   } else if(strcmp(str, "Code") == 0) {
-  //     // printf("================================ calculate_object_size:code\n");
-  //     uint32_t codeLength = object->Get(String::New("code"))->ToString()->Utf8Length();
-  //     // Unpack the object and encode
-  //     Local<Value> scopeObject = object->Get(String::New("scope"));
-  //     // Let's calculate the size the code object adds adds
-  //     object_size += codeLength + 4 + BSON::calculate_object_size2(scopeObject) + 4 + 1;
-  //     free(str);
-  //   } else if(strcmp(str, "DBRef") == 0) {
-  //     // printf("================================ calculate_object_size:dbref\n");
-  //     // Unpack the dbref
-  //     Local<Object> dbref = value->ToObject();
-  //     // Create an object containing the right namespace variables
-  //     Local<Object> obj = Object::New();
-  //     // Encode the oid to bin
-  //     obj->Set(String::New("$ref"), dbref->Get(String::New("namespace")));
-  //     obj->Set(String::New("$id"), dbref->Get(String::New("oid")));
-  //     
-  //     if(dbref->Get(String::New("db"))->IsString()) {
-  //       obj->Set(String::New("$db"), dbref->Get(String::New("db")));
-  //     }
-  //     // Calculate size
-  //     object_size += BSON::calculate_object_size2(obj);
-  //     free(str);
-  //   } else {
-  //     // printf("================================ calculate_object_size:object\n");
-  //     // Unwrap the object
-  //     Local<Object> object = value->ToObject();
-  //     Local<Array> property_names = object->GetPropertyNames();
-  //   
-  //     // Process all the properties on the object
-  //     for(uint32_t index = 0; index < property_names->Length(); index++) {
-  //       // printf("================================ calculate_object_size:string\n");
-  //       // Fetch the property name
-  //       Local<String> property_name = property_names->Get(index)->ToString();
-  //     
-  //       // Convert name to char*
-  //       ssize_t len = DecodeBytes(property_name, UTF8);
-  //       // Fetch the object for the property
-  //       Local<Value> property = object->Get(property_name);
-  //       // Get size of property (property + property name length + 1 for terminating 0)
-  //       object_size += BSON::calculate_object_size2(property) + len + 1 + 1;
-  //     }      
-  //   
-  //     object_size = object_size + 4 + 1;      
-  //   }
-  // } 
 
   return object_size;
 }
