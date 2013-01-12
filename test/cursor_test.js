@@ -2220,7 +2220,7 @@ exports.shouldNotFailDueToStackOverflowEach = function(test) {
       collection.find({}).each(function(err, item) {
         if(item == null) {
           var e = new Date().getTime();
-          console.log("================== total time :: " + (e - s));
+          // console.log("================== total time :: " + (e - s));
 
           test.equal(30000, total);
           test.done();
@@ -2248,7 +2248,7 @@ exports.shouldNotFailDueToStackOverflowToArray = function(test) {
 
       collection.find({}).toArray(function(err, items) {
         var e = new Date().getTime();
-        console.log("================== total time :: " + (e - s));
+        // console.log("================== total time :: " + (e - s));
 
         test.equal(30000, items.length);
         test.done();
