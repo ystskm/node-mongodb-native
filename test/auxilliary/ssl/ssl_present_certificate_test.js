@@ -67,12 +67,13 @@ exports.shouldFailDueToNotPresentingCertificateToServer = function(test) {
     , ssl_ca: '../test/certificates/ca.pem'
     , ssl_crl: '../test/certificates/crl.pem'    
     , ssl_server_pem: "../test/certificates/server.pem"
+    , ssl_force_validate_certificates: true
   });
 
   serverManager.start(true, function() {
     db1.open(function(err, db) {  
-      console.log(err)
-      // test.ok(err != null);
+      // console.log(err)
+      test.ok(err != null);
       test.done();      
     })      
   });
@@ -113,6 +114,102 @@ exports.shouldCorrectlyValidateAndPresentCertificate = function(test) {
 
   serverManager.start(true, function() {
     db1.open(function(err, db) {        
+      // Create a collection
+      db.createCollection('shouldCorrectlyValidateAndPresentCertificate', function(err, collection) {
+        collection.remove({});
+        collection.insert([{a:1}, {b:2}, {c:'hello world'}]);          
+        collection.insert([{a:1}, {b:2}, {c:'hello world'}]);          
+        collection.insert([{a:1}, {b:2}, {c:'hello world'}]);          
+        collection.insert([{a:1}, {b:2}, {c:'hello world'}]);          
+        collection.insert([{a:1}, {b:2}, {c:'hello world'}], {w:1}, function(err, result) {
+          collection.find({}).toArray(function(err, items) {
+            test.equal(15, items.length);
+            db.close();
+            test.done();
+          })
+        });
+      });        
+    })      
+  });
+}
+
+exports.shouldFailDuePresentingWrongCredentialsToServer = function(test) {
+  if(process.env['JENKINS']) return test.done();
+  // Read the ca
+  var ca = [fs.readFileSync(__dirname + "/../../certificates/ca.pem")];
+  var cert = fs.readFileSync(__dirname + "/../../certificates/smoke.pem");
+  var key = fs.readFileSync(__dirname + "/../../certificates/smoke.pem");
+  // Create a db connection
+  var db1 = new Db(MONGODB, new Server("server", 27017, 
+    {   auto_reconnect: false
+      , poolSize:1
+      , ssl:ssl
+      , ssl_validate:true
+      , ssl_ca:ca
+      , ssl_key:key
+      , ssl_cert:cert
+    }), {w:0, native_parser: (process.env['TEST_NATIVE'] != null)});
+  
+  // All inserted docs
+  var docs = [];
+  var errs = [];
+  var insertDocs = [];
+  
+  // Start server
+  serverManager = new ServerManager({
+      auth:false
+    , purgedirectories:true
+    , journal:true
+    , ssl:ssl
+    , ssl_ca: '../test/certificates/ca.pem'
+    , ssl_crl: '../test/certificates/crl.pem'    
+    , ssl_server_pem: "../test/certificates/server.pem"
+  });
+
+  serverManager.start(true, function() {
+    db1.open(function(err, db) {  
+      test.ok(err != null);
+      test.done();      
+    })      
+  });
+}
+
+exports.shouldCorrectlyPresentPasswordProtectedCertificate = function(test) {
+  if(process.env['JENKINS']) return test.done();
+  // Read the ca
+  var ca = [fs.readFileSync(__dirname + "/../../certificates/ca.pem")];
+  var cert = fs.readFileSync(__dirname + "/../../certificates/password_protected.pem");
+  var key = fs.readFileSync(__dirname + "/../../certificates/password_protected.pem");
+  // Create a db connection
+  var db1 = new Db(MONGODB, new Server("server", 27017, 
+    {   auto_reconnect: false
+      , poolSize:1
+      , ssl:ssl
+      , ssl_validate:true
+      , ssl_ca:ca
+      , ssl_key:key
+      , ssl_cert:cert
+      , ssl_pass:'qwerty'
+    }), {w:0, native_parser: (process.env['TEST_NATIVE'] != null)});
+  
+  // All inserted docs
+  var docs = [];
+  var errs = [];
+  var insertDocs = [];
+  
+  // Start server
+  serverManager = new ServerManager({
+      auth:false
+    , purgedirectories:true
+    , journal:true
+    , ssl:ssl
+    , ssl_ca: '../test/certificates/ca.pem'
+    , ssl_crl: '../test/certificates/crl.pem'    
+    , ssl_server_pem: "../test/certificates/server.pem"
+  });
+
+  serverManager.start(true, function() {
+    db1.open(function(err, db) {  
       // Create a collection
       db.createCollection('shouldCorrectlyValidateAndPresentCertificate', function(err, collection) {
         collection.remove({});

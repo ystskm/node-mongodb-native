@@ -24,6 +24,12 @@ var ReplicaSetManager = exports.ReplicaSetManager = function(options) {
   this.killNodeWaitTime = options['kill_node_wait_time'] != null ? options['kill_node_wait_time'] : 1000;
   this.tags = options['tags'] != null ? options['tags'] : [];
   this.ssl = options['ssl'] != null ? options['ssl'] : false;
+  this.ssl_server_pem = options['ssl_server_pem'] != null ? options['ssl_server_pem'] : null;
+  this.ssl_server_pem_pass = options['ssl_server_pem_pass'] != null ? options['ssl_server_pem_pass'] : null;
+  this.ssl_force_validate_certificates = options['ssl_force_validate_certificates'] != null ? options['ssl_force_validate_certificates'] : null;
+  // Ca settings for ssl
+  this.ssl_ca = options['ssl_ca'] != null ? options['ssl_ca'] : null;
+  this.ssl_crl = options['ssl_crl'] != null ? options['ssl_crl'] : null;
 
   this.arbiterCount = options["arbiter_count"] != null ? options["arbiter_count"] : 2;
   this.secondaryCount = options["secondary_count"] != null ? options["secondary_count"] : 1;
@@ -187,6 +193,11 @@ ReplicaSetManager.prototype.initNode = function(n, fields, callback) {
   var port = this.startPort + n;
   this.ports.push(port);
   this.mongods[n]["ssl"] = this.ssl;
+  this.mongods[n]["ssl_server_pem"] = this.ssl_server_pem;
+  this.mongods[n]["ssl_server_pem_pass"] = this.ssl_server_pem_pass;
+  this.mongods[n]["ssl_force_validate_certificates"] = this.ssl_force_validate_certificates;
+  this.mongods[n]["ssl_ca"] = this.ssl_ca;
+  this.mongods[n]["ssl_crl"] = this.ssl_crl;
   this.mongods[n]["host"] = this.host;
   this.mongods[n]["port"] = port;
   this.mongods[n]["db_path"] = getPath(this, "rs-" + port);
@@ -627,9 +638,26 @@ ReplicaSetManager.prototype.startCmd = function(n) {
 
   // If we have ssl defined set up with test certificate
   if(this.ssl) {
-    var path = getPath(this, '../test/certificates');
-    this.mongods[n]["start"] = this.mongods[n]["start"] + " --sslOnNormalPorts --sslPEMKeyFile=" + path + "/mycert.pem --sslPEMKeyPassword=10gen";
+    var path = getPath(this, this.ssl_server_pem);
+    this.mongods[n]["start"] = this.mongods[n]["start"] + " --sslOnNormalPorts --sslPEMKeyFile=" + path;
+
+    if(this.ssl_server_pem_pass) {
+      this.mongods[n]["start"] = this.mongods[n]["start"] + " --sslPEMKeyPassword=" + self.ssl_server_pem_pass;
+    }
+
+    if(this.ssl_ca) {
+      this.mongods[n]["start"] = this.mongods[n]["start"] + " --sslCAFile=" + getPath(self, self.ssl_ca);
+    }
+
+    if(this.ssl_crl) {
+      this.mongods[n]["start"] = this.mongods[n]["start"] + " --sslCRLFile=" + getPath(self, self.ssl_crl);
+    }
+
+    if(this.ssl_force_validate_certificates) {
+      this.mongods[n]["start"] = this.mongods[n]["start"] + " --sslForceCertificateValidation"      
+    }
   }
 
+  console.log(this.mongods[n]["start"]);
   return this.mongods[n]["start"];
 }
