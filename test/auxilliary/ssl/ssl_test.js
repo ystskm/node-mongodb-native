@@ -45,7 +45,7 @@ exports.shouldCorrectlyCommunicateUsingSSLSocket = function(test) {
   var insertDocs = [];
   
   // Start server
-  serverManager = new ServerManager({auth:false, purgedirectories:true, journal:true, ssl:ssl})
+  serverManager = new ServerManager({auth:false, purgedirectories:true, journal:true, ssl:ssl, ssl_server_pem: "../test/certificates/server.pem"})
   serverManager.start(true, function() {
     db1.open(function(err, db) {        
       // Create a collection

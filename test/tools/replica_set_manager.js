@@ -359,7 +359,6 @@ ReplicaSetManager.prototype.stepDownPrimary = function(callback) {
       if(err) return callback(err, null);
       // Execute stepdown process
       connection.admin().command({"replSetStepDown": 90});
-      connection.close();
       // Return the callback
       return callback(null, connection);
     });
@@ -667,6 +666,6 @@ ReplicaSetManager.prototype.startCmd = function(n) {
     }
   }
 
-  console.log(this.mongods[n]["start"]);
+  // console.log(this.mongods[n]["start"]);
   return this.mongods[n]["start"];
 }

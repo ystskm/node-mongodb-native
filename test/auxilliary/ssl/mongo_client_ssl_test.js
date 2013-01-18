@@ -46,9 +46,37 @@ exports.shouldCorrectlyCommunicateUsingSSLSocket = function(test) {
   var insertDocs = [];
   
   // Start server
-  serverManager = new ServerManager({auth:false, purgedirectories:true, journal:true, ssl:ssl})
+  serverManager = new ServerManager({auth:false, purgedirectories:true, journal:true, ssl:ssl, ssl_server_pem: "../test/certificates/server.pem"})
   serverManager.start(true, function() {
     MongoClient.connect("mongodb://localhost:27017/test?ssl=true", function(err, db) {
+      test.equal(null, err);
+      test.ok(db != null);
+
+      db.close();
+      serverManager.killAll();
+      test.done();
+    });
+  });
+}
+
+exports.shouldCorrectlyValidateServerCertificate = function(test) {
+  if(process.env['JENKINS']) return test.done();
+  var db1 = new Db(MONGODB, new Server("127.0.0.1", 27017, {auto_reconnect: false, poolSize:4, ssl:ssl}), {w:0, native_parser: (process.env['TEST_NATIVE'] != null)});
+  // All inserted docs
+  var docs = [];
+  var errs = [];
+  var insertDocs = [];
+  
+  // Start server
+  serverManager = new ServerManager({auth:false, purgedirectories:true, journal:true, ssl:ssl, ssl_server_pem: "../test/certificates/server.pem"})
+  serverManager.start(true, function() {
+    // Read the ca
+    var ca = [fs.readFileSync(__dirname + "/../../certificates/ca.pem")];
+    // Connect and validate the server certificate
+    MongoClient.connect("mongodb://localhost:27017/test?ssl=true", {
+        ssl_validate:true
+      , ssl_ca:ca
+    }, function(err, db) {
       test.equal(null, err);
       test.ok(db != null);
 

@@ -121,7 +121,7 @@ exports.shouldFailDuePresentingWrongCredentialsToServer = function(test) {
     ], 
     {
         rs_name:RS.name
-      , poolSize:2
+      , poolSize:5
       , ssl:ssl
       , ssl_validate:true
       , ssl_ca:ca
@@ -134,12 +134,6 @@ exports.shouldFailDuePresentingWrongCredentialsToServer = function(test) {
   // Connect to the replicaset
   var slaveDb = null;
   var db = new Db('foo', replSet, {w:0, native_parser: (process.env['TEST_NATIVE'] != null)});
-  console.log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-  console.log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-  console.log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-  console.log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-  console.log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-  console.log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
   db.open(function(err, p_db) {
     test.ok(err != null);
     test.done();
