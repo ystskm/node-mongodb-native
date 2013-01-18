@@ -27,6 +27,7 @@ var ReplicaSetManager = exports.ReplicaSetManager = function(options) {
   this.ssl_server_pem = options['ssl_server_pem'] != null ? options['ssl_server_pem'] : null;
   this.ssl_server_pem_pass = options['ssl_server_pem_pass'] != null ? options['ssl_server_pem_pass'] : null;
   this.ssl_force_validate_certificates = options['ssl_force_validate_certificates'] != null ? options['ssl_force_validate_certificates'] : null;
+  this.ssl_client_pem = options['ssl_client_pem'] != null ? options['ssl_client_pem'] : null;
   // Ca settings for ssl
   this.ssl_ca = options['ssl_ca'] != null ? options['ssl_ca'] : null;
   this.ssl_crl = options['ssl_crl'] != null ? options['ssl_crl'] : null;
@@ -358,6 +359,7 @@ ReplicaSetManager.prototype.stepDownPrimary = function(callback) {
       if(err) return callback(err, null);
       // Execute stepdown process
       connection.admin().command({"replSetStepDown": 90});
+      connection.close();
       // Return the callback
       return callback(null, connection);
     });
@@ -421,6 +423,8 @@ ReplicaSetManager.prototype.ensureUp = function(callback) {
         numberOfInitiateRetries = numberOfInitiateRetries - 1
         // If have no more retries stop
         if(numberOfInitiateRetries == 0) {
+          // Close connection
+          if(connection != null) connection.close();
           // Set that we are done
           done = true;
           // perform callback
@@ -551,7 +555,12 @@ ReplicaSetManager.prototype.getConnection = function(node, callback) {
   // Get the node
   if(self.mongods[node] != null) {
     var intervalId = setInterval(function() {
-      var connection = new Db("replicaset_test", new Server(self.host, self.mongods[node]["port"], {ssl:self.ssl, poolSize:1}), {w:0});
+      var connection = new Db("replicaset_test", new Server(self.host, self.mongods[node]["port"], {
+          ssl:self.ssl
+        , poolSize:1
+        , ssl_key:self.ssl_client_pem
+        , ssl_cert:self.ssl_client_pem
+      }), {w:0});
       connection.open(function(err, db) {
         if(err == null && !done) {
           // Set done
@@ -642,15 +651,15 @@ ReplicaSetManager.prototype.startCmd = function(n) {
     this.mongods[n]["start"] = this.mongods[n]["start"] + " --sslOnNormalPorts --sslPEMKeyFile=" + path;
 
     if(this.ssl_server_pem_pass) {
-      this.mongods[n]["start"] = this.mongods[n]["start"] + " --sslPEMKeyPassword=" + self.ssl_server_pem_pass;
+      this.mongods[n]["start"] = this.mongods[n]["start"] + " --sslPEMKeyPassword=" + this.ssl_server_pem_pass;
     }
 
     if(this.ssl_ca) {
-      this.mongods[n]["start"] = this.mongods[n]["start"] + " --sslCAFile=" + getPath(self, self.ssl_ca);
+      this.mongods[n]["start"] = this.mongods[n]["start"] + " --sslCAFile=" + getPath(this, this.ssl_ca);
     }
 
     if(this.ssl_crl) {
-      this.mongods[n]["start"] = this.mongods[n]["start"] + " --sslCRLFile=" + getPath(self, self.ssl_crl);
+      this.mongods[n]["start"] = this.mongods[n]["start"] + " --sslCRLFile=" + getPath(this, this.ssl_crl);
     }
 
     if(this.ssl_force_validate_certificates) {
