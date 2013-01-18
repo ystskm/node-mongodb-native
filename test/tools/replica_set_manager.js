@@ -255,7 +255,7 @@ ReplicaSetManager.prototype.initNode = function(n, fields, callback) {
 
 ReplicaSetManager.prototype.killAll = function(callback) {
   exec('killall -9 mongod', function(err, stdout, stderr) {
-    return callback();
+    if(typeof callback == 'function') return callback();
   });
 }
 
