@@ -67,7 +67,6 @@ exports.shouldFailDueToNotPresentingCertificateToServer = function(test) {
     , ssl_ca: '../test/certificates/ca.pem'
     , ssl_crl: '../test/certificates/crl.pem'    
     , ssl_server_pem: "../test/certificates/server.pem"
-    , ssl_force_validate_certificates: true
   });
 
   serverManager.start(true, function() {

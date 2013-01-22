@@ -35,7 +35,6 @@ exports.setUp = function(callback) {
     ssl_ca: '../test/certificates/ca.pem',
     ssl_crl: '../test/certificates/crl.pem',
     ssl_server_pem: "../test/certificates/server.pem",
-    ssl_force_validate_certificates: true,    
     ssl_client_pem: cert,
 
     arbiter_count:1,

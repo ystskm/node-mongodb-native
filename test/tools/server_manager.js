@@ -20,7 +20,7 @@ var ServerManager = exports.ServerManager = function(options) {
   this.ssl = options['ssl'] != null ? options['ssl'] : false;
   this.ssl_server_pem = options['ssl_server_pem'] != null ? options['ssl_server_pem'] : null;
   this.ssl_server_pem_pass = options['ssl_server_pem_pass'] != null ? options['ssl_server_pem_pass'] : null;
-  this.ssl_force_validate_certificates = options['ssl_force_validate_certificates'] != null ? options['ssl_force_validate_certificates'] : null;
+  this.ssl_weak_certificate_validation = options['ssl_weak_certificate_validation'] != null ? options['ssl_weak_certificate_validation'] : null;
   // Ca settings for ssl
   this.ssl_ca = options['ssl_ca'] != null ? options['ssl_ca'] : null;
   this.ssl_crl = options['ssl_crl'] != null ? options['ssl_crl'] : null;
@@ -155,8 +155,8 @@ var generateStartCmd = function(self, options) {
       startCmd = startCmd + " --sslCRLFile=" + getPath(self, self.ssl_crl);
     }
 
-    if(self.ssl_force_validate_certificates) {
-      startCmd = startCmd + " --sslForceCertificateValidation"      
+    if(self.ssl_weak_certificate_validation) {
+      startCmd = startCmd + " --sslWeakCertificateValidation"
     }
   }
   // console.log(startCmd)
