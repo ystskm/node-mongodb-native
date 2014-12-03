@@ -185,7 +185,8 @@
   },
   "dependencies": {
     "bson": "0.2.8",
-    "kerberos": "0.0.3"
+    "kerberos": "0.0.3",
+    "noleak-emitter": ">=0.1.1"
   },
   "devDependencies": {
     "dox": "0.4.4",
