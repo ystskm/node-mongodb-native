@@ -199,7 +199,9 @@
     "step": "0.0.5",
     "async": "0.1.22",
     "integra": "0.0.3",
-    "optimist": "latest"
+    "optimist": "latest",
+    "nodeunit": "*",
+    "nodeunit-ci": "*"
   },
   "optionalDependencies": {
     "kerberos": "0.0.3"
@@ -216,7 +218,8 @@
     "node": ">=0.6.19"
   },
   "scripts": {
-    "test": "make test_functional"
+    "test": "make test_functional",
+    "test": "node test/_runner.js --harmony"
   },
   "licenses": [
     {
