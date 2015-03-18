@@ -222,7 +222,7 @@
     "node": ">=0.10"
   },
   "scripts": {
-    "test": "node test/runner.js -t functional"
+    "test": "node test/_runner.js"
   },
   "licenses": [
     {

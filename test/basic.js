@@ -27,33 +27,52 @@ module.exports = nodeunit.testCase({
     col.count(function(e, r) {
       t.equal(e, null, 'countE');
       t.equal(typeof r, 'number', 'countR');
+      console.log('init.count: ', arguments);
       col.remove({}, function(e, r) {
         t.equal(e, null, 'removeE');
         t.equal(typeof r, 'number', 'removeR');
+        console.log('init.remove: ', arguments);
         t.done();
       });
     });
   },
   'CLUD': function(t) {
-//    Promise;
-    col.insert([{a: 1}, {a:2}], function(e, r){
+    //    Promise;
+    col.insert([{
+      a: 1
+    }, {
+      b: 2
+    }], function(e, r) {
       t.equal(e, null, 'insertE');
       t.equal(Array.isArray(r), true);
       t.equal(r.length, 2);
       t.equal(r[0].a, 1, 'insertR');
-      col.count({}, function(e, r){
+      console.log('CLUD.insert: ', arguments);
+      col.count({}, function(e, r) {
         t.equal(e, null, 'countE');
         t.equal(r, 2, 'countR');
-        col.update({a:1}, {$set: {b:1} }, function(e, r){
+        console.log('CLUD.count: ', arguments);
+        col.update({
+          a: 1
+        }, {
+          $set: {
+            b: 1
+          }
+        }, function(e, r) {
           t.equal(e, null, 'updateE');
           t.equal(r, 1, 'updateR');
-          col.findOne({a: 1}, function(e, r){
+          console.log('CLUD.update: ', arguments);
+          col.findOne({
+            a: 1
+          }, function(e, r) {
             t.equal(e, null, 'findOneE');
             t.equal(r.a, 1, 'findOneRa');
             t.equal(r.b, 1, 'findOneRb');
-            col.remove({}, function(e, r){
+            console.log('CLUD.findOne: ', arguments);
+            col.remove({}, function(e, r) {
               t.equal(e, null, 'removeE');
               t.equal(r, 2, 'removeR');
+              console.log('CLUD.remove: ', arguments);
               t.done();
             });
           });
@@ -61,7 +80,7 @@ module.exports = nodeunit.testCase({
       });
     });
   },
-  'finalize': function(t){
+  'finalize': function(t) {
     svr.close();
     t.done();
   }
