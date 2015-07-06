@@ -69,9 +69,11 @@ module.exports = nodeunit.testCase({
             t.equal(r.a, 1, 'findOneRa');
             t.equal(r.b, 1, 'findOneRb');
             console.log('CLUD.findOne: ', arguments);
-            col.remove({}, function(e, r) {
+            col.remove({}, {
+              justOne: true
+            }, function(e, r) {
               t.equal(e, null, 'removeE');
-              t.equal(r, 2, 'removeR');
+              t.equal(r, 1, 'removeR');
               console.log('CLUD.remove: ', arguments);
               t.done();
             });
