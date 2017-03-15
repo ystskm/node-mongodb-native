@@ -222,7 +222,7 @@
   },
   "scripts": {
     "test": "node test/_runner.js",
-    "postinstall": "cp lib/bson/bson.js node_modules/bson/lib/bson.js"
+    "postinstall": "cp lib/bson/bson.js node_modules/bson/lib/bson/bson.js"
   },
   "licenses": [
     {
