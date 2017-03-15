@@ -184,7 +184,7 @@
     "url": "http://github.com/mongodb/node-mongodb-native/issues"
   },
   "dependencies": {
-    "bson": "~0.2",
+    "bson": "0.2.22",
     "kerberos": "0.0.11",
     "noleak-emitter": ">=0.1.1",
     "readable-stream": "latest"
@@ -221,7 +221,8 @@
     "node": ">=0.10"
   },
   "scripts": {
-    "test": "node test/_runner.js"
+    "test": "node test/_runner.js",
+    "postinstall": "cp lib/bson/bson.js node_modules/bson/lib/bson.js"
   },
   "licenses": [
     {
