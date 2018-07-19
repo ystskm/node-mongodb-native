@@ -8,7 +8,7 @@
     "db",
     "03-10-2017"
   ],
-  "version": "1.4.38",
+  "version": "1.4.39",
   "author": {
     "name": "Yoshitaka Sakamoto",
     "email": "sakamoto@liberty-technology.biz"
@@ -185,6 +185,7 @@
     "url": "http://github.com/mongodb/node-mongodb-native/issues"
   },
   "dependencies": {
+    "mongodb-core": "3.1.0",
     "bson": "0.2.22",
     "kerberos": "0.0.11",
     "noleak-emitter": ">=0.1.1",
