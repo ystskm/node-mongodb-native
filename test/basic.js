@@ -1,6 +1,6 @@
 /***/
 var NULL = null, TRUE = true, FALSE = false;
-var nodeunit = require('nodeunit');
+var nodeunit = require('foonyah-ci');
 var env = require('./env.json');
 
 var mongodb = require('../index');

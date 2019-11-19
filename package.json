@@ -6,9 +6,9 @@
     "mongo",
     "driver",
     "db",
-    "03-10-2017"
+    "19-11-2019"
   ],
-  "version": "1.4.39",
+  "version": "1.4.40",
   "author": {
     "name": "Yoshitaka Sakamoto",
     "email": "sakamoto@liberty-technology.biz"
@@ -196,8 +196,7 @@
     "uglify-js": "1.2.5",
     "ejs": "0.6.1",
     "request": "2.12.0",
-    "nodeunit": "0.7.3",
-    "nodeunit-ci": "*",
+    "foonyah-ci": "*",
     "markdown": "0.3.1",
     "integra": "0.1.8",
     "optimist": "latest",
