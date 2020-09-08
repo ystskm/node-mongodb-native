@@ -1,5 +1,5 @@
 /***/
-var NULL = null, TRUE = true, FALSE = false;
+var NULL = null, TRUE = true, FALSE = false, UNDEF = undefined;
 var nodeunit = require('foonyah-ci');
 var env = require('./env.json');
 
