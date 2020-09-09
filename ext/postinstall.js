@@ -1,7 +1,9 @@
 /***/
 (function() {
+  // 修正パッチを当てるスクリプト
   var NULL = null, TRUE = true, FALSE = false;
   var fs = require('fs');
+  var keeper = setInterval(()=>console.log('PostInstall processing ... '), 5 * 1000);
   Promise.resolve().then(()=>{
   
     // Overwrite the installed script in node_modules by the good script
@@ -12,8 +14,10 @@
   
   }).then(()=>{
     console.log('PostInstall process successfully!');
+    clearInterval(keeper);
   })['catch'](e=>{
     console.log('PostInstall process failed ... ', e);
+    clearInterval(keeper);
     throw e;
   });
   function copyFile(src, dst) {
